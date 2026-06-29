@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>ACJ DEV: Hero Arena</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        body { overflow: hidden; background-color: #000; font-family: 'Arial', sans-serif; touch-action: none; }
+        
+        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* Damage Flash Overlay */
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 0, 0, 0.5); opacity: 0; transition: opacity 0.2s; z-index: 1; pointer-events: none;
+        }
+
+        /* Menus */
+        .overlay-menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(10, 15, 20, 0.85); z-index: 10; pointer-events: auto;
+        }
+        .overlay-menu h1 { color: #00ffcc; font-size: 3rem; margin-bottom: 20px; text-shadow: 0 0 10px #00ffcc; }
+        #game-over { display: none; }
+        #game-over h1 { color: #ff3333; text-shadow: 0 0 15px #ff3333; }
+        
+        .main-btn {
+            padding: 15px 40px; font-size: 1.5rem; font-weight: bold; color: #fff; background: #ff007f;
+            border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 0 15px #ff007f;
+        }
+
+        /* HUD */
+        #hud { display: none; width: 100%; height: 100%; position: relative; color: white; z-index: 2; }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 6px; height: 6px; background: #fff; border-radius: 50%; box-shadow: 0 0 5px #fff;
+        }
+        
+        /* Health Bar */
+        #health-container { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 250px; text-align: center; font-weight: bold; text-shadow: 2px 2px 0px #000; }
+        #health-bar-bg { width: 100%; height: 20px; background: rgba(50, 0, 0, 0.8); border: 2px solid #fff; border-radius: 10px; overflow: hidden; margin-top: 5px; }
+        #health-bar-fill { width: 100%; height: 100%; background: #00ffcc; transition: width 0.2s, background-color 0.2s; }
+
+        .stats { position: absolute; padding: 10px; font-size: 1.2rem; font-weight: bold; text-shadow: 2px 2px 0px #000; }
+        #score { top: 10px; left: 10px; color: #00ffcc; }
+        #weapon-info { top: 10px; right: 10px; color: #ff007f; text-align: right; }
+        #ability-status { font-size: 0.9rem; color: #aaa; }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none; position: absolute; bottom: 0; left: 0; 
+            width: 100%; height: 100%; z-index: 5; pointer-events: none;
+        }
+        #look-zone { position: absolute; top: 0; right: 0; width: 60%; height: 60%; pointer-events: auto; }
+        
+        /* Movement D-Pad */
+        #d-pad {
+            position: absolute; bottom: 20px; left: 20px; width: 150px; height: 150px;
+            pointer-events: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr;
+        }
+        .dir-btn { background: rgba(255, 255, 255, 0.2); border-radius: 10px; margin: 2px; }
+        .dir-btn:active { background: rgba(255, 255, 255, 0.5); }
+        #btn-w { grid-column: 2; grid-row: 1; }
+        #btn-a { grid-column: 1; grid-row: 2; }
+        #btn-s { grid-column: 2; grid-row: 3; }
+        #btn-d { grid-column: 3; grid-row: 2; }
+
+        /* Action Buttons */
+        .action-btn {
+            position: absolute; background: rgba(255, 255, 255, 0.2); 
+            border: 2px solid rgba(255,255,255,0.5); border-radius: 50%;
+            pointer-events: auto; color: white; font-weight: bold;
+            display: flex; justify-content: center; align-items: center; font-size: 0.8rem; text-align: center;
+        }
+        .action-btn:active { background: rgba(255, 255, 255, 0.6); color: black; }
+        
+        #shoot-btn { bottom: 30px; right: 30px; width: 80px; height: 80px; background: rgba(255, 50, 50, 0.4); }
+        #ability-btn { bottom: 120px; right: 30px; width: 70px; height: 70px; background: rgba(138, 43, 226, 0.5); border-color: #8a2be2; }
+        #jump-btn { bottom: 30px; right: 130px; width: 60px; height: 60px; }
+        #slide-btn { bottom: 100px; right: 110px; width: 60px; height: 60px; }
+        #swap-btn { top: 60px; right: 10px; width: 60px; height: 60px; border-radius: 10px; }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="game-ui">
+        <div id="damage-flash"></div>
+        
+        <div id="menu" class="overlay-menu">
+            <h1>HERO ARENA</h1>
+            <button class="main-btn" id="play-btn">DROP IN</button>
+        </div>
+
+        <div id="game-over" class="overlay-menu">
+            <h1>YOU DIED</h1>
+            <button class="main-btn" id="respawn-btn">RESPAWN</button>
+        </div>
+
+        <div id="hud">
+            <div id="crosshair"></div>
+            <div class="stats" id="score">KILLS: <span id="kill-count">0</span></div>
+            
+            <div id="health-container">
+                ARMOR: <span id="hp-text">100</span>
+                <div id="health-bar-bg"><div id="health-bar-fill"></div></div>
+            </div>
+
+            <div class="stats" id="weapon-info">
+                <span id="wep-name">PISTOL</span><br>
+                <span id="ability-status">Ability READY</span>
+            </div>
+        </div>
+
+        <div id="mobile-controls">
+            <div id="look-zone"></div>
+            <div id="d-pad">
+                <div class="dir-btn" id="btn-w"></div>
+                <div class="dir-btn" id="btn-a"></div>
+                <div class="dir-btn" id="btn-s"></div>
+                <div class="dir-btn" id="btn-d"></div>
+            </div>
+            <div class="action-btn" id="shoot-btn">FIRE</div>
+            <div class="action-btn" id="ability-btn">SKILL</div>
+            <div class="action-btn" id="jump-btn">JUMP</div>
+            <div class="action-btn" id="slide-btn">SLIDE</div>
+            <div class="action-btn" id="swap-btn">SWAP</div>
+        </div>
+    </div>
+
+    <script type="module" src="game.js"></script>
+</body>
+</html>
